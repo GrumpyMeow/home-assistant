@@ -55,6 +55,7 @@ FLOWS = [
     "neato",
     "nest",
     "notion",
+    "onvif",
     "opentherm_gw",
     "openuv",
     "owntracks",

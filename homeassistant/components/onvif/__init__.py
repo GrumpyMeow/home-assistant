@@ -71,13 +71,10 @@ async def async_unload_entry(hass, config_entry):
 
 async def async_populate_options(hass, config_entry):
     """Populate default options for device."""
-    device = await get_device(hass, config_entry.data[CONF_DEVICE])
-
-    supported_formats = device.vapix.params.image_format
-    camera = bool(supported_formats)
+    await get_device(hass, config_entry.data[CONF_DEVICE])
 
     options = {
-        CONF_CAMERA: camera,
+        CONF_CAMERA: True,
         CONF_EVENTS: True,
         CONF_TRIGGER_TIME: DEFAULT_TRIGGER_TIME,
     }

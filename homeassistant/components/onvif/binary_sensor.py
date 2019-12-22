@@ -2,8 +2,6 @@
 
 from datetime import timedelta
 
-from onvif.event_stream import CLASS_INPUT, CLASS_OUTPUT
-
 from homeassistant.components.binary_sensor import BinarySensorDevice
 from homeassistant.const import CONF_MAC, CONF_TRIGGER_TIME
 from homeassistant.core import callback
@@ -11,8 +9,10 @@ from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.event import async_track_point_in_utc_time
 from homeassistant.util.dt import utcnow
 
-from .onvif_base import OnvifEventBase
 from .const import DOMAIN as ONVIF_DOMAIN
+from .onvif_base import OnvifEventBase
+
+# from onvif.event_stream import CLASS_INPUT, CLASS_OUTPUT
 
 
 async def async_setup_entry(hass, config_entry, async_add_entities):
@@ -25,8 +25,10 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
         """Add binary sensor from Onvif device."""
         event = device.api.event.events[event_id]
 
-        if event.CLASS != CLASS_OUTPUT:
-            async_add_entities([OnvifBinarySensor(event, device)], True)
+        async_add_entities([OnvifBinarySensor(event, device)], True)
+
+    #        if event.CLASS != CLASS_OUTPUT:
+    #            async_add_entities([OnvifBinarySensor(event, device)], True)
 
     device.listeners.append(
         async_dispatcher_connect(hass, device.event_new_sensor, async_add_sensor)
@@ -75,13 +77,13 @@ class OnvifBinarySensor(OnvifEventBase, BinarySensorDevice):
     @property
     def name(self):
         """Return the name of the event."""
-        if (
-            self.event.CLASS == CLASS_INPUT
-            and self.event.id
-            and self.device.api.vapix.ports[self.event.id].name
-        ):
-            return "{} {}".format(
-                self.device.name, self.device.api.vapix.ports[self.event.id].name
-            )
+        # if (
+        #     self.event.CLASS == CLASS_INPUT
+        #     and self.event.id
+        #     and self.device.api.vapix.ports[self.event.id].name
+        # ):
+        #     return "{} {}".format(
+        #         self.device.name, self.device.api.vapix.ports[self.event.id].name
+        #     )
 
         return super().name

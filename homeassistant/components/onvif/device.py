@@ -1,10 +1,10 @@
 """Onvif network device abstraction."""
 
 import asyncio
+import os
 
-import async_timeout
 import onvif
-from onvif.streammanager import SIGNAL_PLAYING
+from onvif import ONVIFCamera
 
 from homeassistant.const import (
     CONF_DEVICE,
@@ -21,7 +21,7 @@ from homeassistant.helpers.device_registry import CONNECTION_NETWORK_MAC
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 
 from .const import CONF_CAMERA, CONF_EVENTS, CONF_MODEL, DOMAIN, LOGGER
-from .errors import AuthenticationRequired, CannotConnect
+from .errors import CannotConnect
 
 
 class OnvifNetworkDevice:
@@ -33,9 +33,9 @@ class OnvifNetworkDevice:
         self.config_entry = config_entry
         self.available = True
 
-        self.api = None
+        # self.api = None
+        self.device = None
         self.fw_version = None
-        self.product_type = None
 
         self.listeners = []
 
@@ -67,7 +67,7 @@ class OnvifNetworkDevice:
             connections={(CONNECTION_NETWORK_MAC, self.serial)},
             identifiers={(DOMAIN, self.serial)},
             manufacturer="Onvif",
-            model=f"{self.model} {self.product_type}",
+            model=f"{self.model}",
             name=self.name,
             sw_version=self.fw_version,
         )
@@ -75,7 +75,9 @@ class OnvifNetworkDevice:
     async def async_setup(self):
         """Set up the device."""
         try:
-            self.api = await get_device(self.hass, self.config_entry.data[CONF_DEVICE])
+            self.device = await get_device(
+                self.hass, self.config_entry.data[CONF_DEVICE]
+            )
 
         except CannotConnect:
             raise ConfigEntryNotReady
@@ -84,8 +86,10 @@ class OnvifNetworkDevice:
             LOGGER.error("Unknown error connecting with Onvif device on %s", self.host)
             return False
 
-        self.fw_version = self.api.vapix.params.firmware_version
-        self.product_type = self.api.vapix.params.prodtype
+        devicemgmt = self.device.create_devicemgmt_service()
+        device_information = await devicemgmt.GetDeviceInformation()
+
+        self.fw_version = device_information.FirmwareVersion
 
         if self.config_entry.options[CONF_CAMERA]:
 
@@ -97,10 +101,10 @@ class OnvifNetworkDevice:
 
         if self.config_entry.options[CONF_EVENTS]:
 
-            self.api.stream.connection_status_callback = (
-                self.async_connection_status_callback
-            )
-            self.api.enable_events(event_callback=self.async_event_callback)
+            # self.api.stream.connection_status_callback = (
+            #     self.async_connection_status_callback
+            # )
+            # self.api.enable_events(event_callback=self.async_event_callback)
 
             platform_tasks = [
                 self.hass.config_entries.async_forward_entry_setup(
@@ -127,7 +131,7 @@ class OnvifNetworkDevice:
         can not be used with weak references.
         """
         device = hass.data[DOMAIN][entry.data[CONF_MAC]]
-        device.api.config.host = device.host
+        # device.api.config.host = device.host
         async_dispatcher_send(hass, device.event_new_address)
 
     @property
@@ -143,9 +147,11 @@ class OnvifNetworkDevice:
         Only signal state change if state change is true.
         """
 
-        if self.available != (status == SIGNAL_PLAYING):
-            self.available = not self.available
-            async_dispatcher_send(self.hass, self.event_reachable, True)
+        self.available = not self.available
+        async_dispatcher_send(self.hass, self.event_reachable, True)
+        # if self.available != (status == SIGNAL_PLAYING):
+        #     self.available = not self.available
+        #     async_dispatcher_send(self.hass, self.event_reachable, True)
 
     @property
     def event_new_sensor(self):
@@ -161,12 +167,12 @@ class OnvifNetworkDevice:
     async def start(self, platform_tasks):
         """Start the event stream when all platforms are loaded."""
         await asyncio.gather(*platform_tasks)
-        self.api.start()
+        # self.api.start()
 
     @callback
     def shutdown(self, event):
         """Stop the event stream."""
-        self.api.stop()
+        # self.api.stop()
 
     async def async_reset(self):
         """Reset this device to default state."""
@@ -180,7 +186,7 @@ class OnvifNetworkDevice:
             )
 
         if self.config_entry.options[CONF_EVENTS]:
-            self.api.stop()
+            # self.api.stop()
             platform_tasks += [
                 self.hass.config_entries.async_forward_entry_unload(
                     self.config_entry, platform
@@ -200,39 +206,49 @@ class OnvifNetworkDevice:
 async def get_device(hass, config):
     """Create a Onvif device."""
 
-    device = onvif.OnvifDevice(
-        loop=hass.loop,
-        host=config[CONF_HOST],
-        username=config[CONF_USERNAME],
-        password=config[CONF_PASSWORD],
-        port=config[CONF_PORT],
-        web_proto="http",
+    # device = onvif.OnvifDevice(
+    #     loop=hass.loop,
+    #     host=config[CONF_HOST],
+    #     username=config[CONF_USERNAME],
+    #     password=config[CONF_PASSWORD],
+    #     port=config[CONF_PORT],
+    #     web_proto="http",
+    # )
+
+    device = ONVIFCamera(
+        config[CONF_HOST],
+        config[CONF_PORT],
+        config[CONF_USERNAME],
+        config[CONF_PASSWORD],
+        "{}/wsdl/".format(os.path.dirname(onvif.__file__)),
     )
 
-    device.vapix.initialize_params(preload_data=False)
-    device.vapix.initialize_ports()
+    return device
 
-    try:
-        with async_timeout.timeout(15):
+    # device.vapix.initialize_params(preload_data=False)
+    # device.vapix.initialize_ports()
 
-            await asyncio.gather(
-                hass.async_add_executor_job(device.vapix.params.update_brand),
-                hass.async_add_executor_job(device.vapix.params.update_properties),
-                hass.async_add_executor_job(device.vapix.ports.update),
-            )
+    # try:
+    #     with async_timeout.timeout(15):
 
-        return device
+    #         await asyncio.gather(
+    #             hass.async_add_executor_job(device.vapix.params.update_brand),
+    #             hass.async_add_executor_job(device.vapix.params.update_properties),
+    #             hass.async_add_executor_job(device.vapix.ports.update),
+    #         )
 
-    except onvif.Unauthorized:
-        LOGGER.warning(
-            "Connected to device at %s but not registered.", config[CONF_HOST]
-        )
-        raise AuthenticationRequired
+    #     return device
 
-    except (asyncio.TimeoutError, onvif.RequestError):
-        LOGGER.error("Error connecting to the Onvif device at %s", config[CONF_HOST])
-        raise CannotConnect
+    # except onvif.Unauthorized:
+    #     LOGGER.warning(
+    #         "Connected to device at %s but not registered.", config[CONF_HOST]
+    #     )
+    #     raise AuthenticationRequired
 
-    except onvif.OnvifException:
-        LOGGER.exception("Unknown Onvif communication error occurred")
-        raise AuthenticationRequired
+    # except (asyncio.TimeoutError, onvif.RequestError):
+    #     LOGGER.error("Error connecting to the Onvif device at %s", config[CONF_HOST])
+    #     raise CannotConnect
+
+    # except onvif.OnvifException:
+    #     LOGGER.exception("Unknown Onvif communication error occurred")
+    #     raise AuthenticationRequired

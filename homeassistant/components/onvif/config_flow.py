@@ -14,7 +14,6 @@ from homeassistant.const import (
 )
 from homeassistant.core import callback
 from homeassistant.helpers import config_validation as cv
-from homeassistant.util.json import load_json
 
 from .const import CONF_MODEL, DOMAIN
 from .device import get_device
@@ -88,13 +87,15 @@ class OnvifFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
                     CONF_PASSWORD: user_input[CONF_PASSWORD],
                 }
                 device = await get_device(self.hass, self.device_config)
+                devicemgmt = device.create_devicemgmt_service()
+                device_information = await devicemgmt.GetDeviceInformation()
 
-                self.serial_number = device.vapix.params.system_serialnumber
+                self.serial_number = device_information.SerialNumber
 
                 if self.serial_number in configured_devices(self.hass):
                     raise AlreadyConfigured
 
-                self.model = device.vapix.params.prodnbr
+                self.model = device_information.Model
 
                 return await self._create_entry()
 
@@ -157,67 +158,6 @@ class OnvifFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
         """Update existing entry if it is the same device."""
         entry.data[CONF_DEVICE][CONF_HOST] = host
         self.hass.config_entries.async_update_entry(entry)
-
-    async def async_step_zeroconf(self, discovery_info):
-        """Prepare configuration for a discovered Onvif device.
-
-        This flow is triggered by the discovery component.
-        """
-        serialnumber = discovery_info["properties"]["macaddress"]
-
-        if serialnumber[:6] not in ONVIF_OUI:
-            return self.async_abort(reason="not_onvif_device")
-
-        if discovery_info[CONF_HOST].startswith("169.254"):
-            return self.async_abort(reason="link_local_address")
-
-        # pylint: disable=no-member # https://github.com/PyCQA/pylint/issues/3167
-        self.context["macaddress"] = serialnumber
-
-        if any(
-            serialnumber == flow["context"]["macaddress"]
-            for flow in self._async_in_progress()
-        ):
-            return self.async_abort(reason="already_in_progress")
-
-        device_entries = configured_devices(self.hass)
-
-        if serialnumber in device_entries:
-            entry = device_entries[serialnumber]
-            await self._update_entry(entry, discovery_info[CONF_HOST])
-            return self.async_abort(reason="already_configured")
-
-        config_file = await self.hass.async_add_executor_job(
-            load_json, self.hass.config.path(CONFIG_FILE)
-        )
-
-        # pylint: disable=no-member # https://github.com/PyCQA/pylint/issues/3167
-        self.context["title_placeholders"] = {
-            "name": discovery_info["hostname"][:-7],
-            "host": discovery_info[CONF_HOST],
-        }
-
-        if serialnumber not in config_file:
-            self.discovery_schema = {
-                vol.Required(CONF_HOST, default=discovery_info[CONF_HOST]): str,
-                vol.Required(CONF_USERNAME): str,
-                vol.Required(CONF_PASSWORD): str,
-                vol.Required(CONF_PORT, default=discovery_info[CONF_PORT]): int,
-            }
-
-            return await self.async_step_user()
-
-        try:
-            device_config = DEVICE_SCHEMA(config_file[serialnumber])
-            device_config[CONF_HOST] = discovery_info[CONF_HOST]
-
-            if CONF_NAME not in device_config:
-                device_config[CONF_NAME] = discovery_info["hostname"]
-
-        except vol.Invalid:
-            return self.async_abort(reason="bad_config_file")
-
-        return await self.async_step_import(device_config)
 
     async def async_step_import(self, import_config):
         """Import a Onvif device as a config entry.

@@ -1,14 +1,14 @@
 """Support for Onvif switches."""
 
-from onvif.event_stream import CLASS_OUTPUT
+# from onvif.event_stream import CLASS_OUTPUT
 
 from homeassistant.components.switch import SwitchDevice
 from homeassistant.const import CONF_MAC
 from homeassistant.core import callback
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 
-from .onvif_base import OnvifEventBase
 from .const import DOMAIN as ONVIF_DOMAIN
+from .onvif_base import OnvifEventBase
 
 
 async def async_setup_entry(hass, config_entry, async_add_entities):
@@ -21,8 +21,9 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
         """Add switch from Onvif device."""
         event = device.api.event.events[event_id]
 
-        if event.CLASS == CLASS_OUTPUT:
-            async_add_entities([OnvifSwitch(event, device)], True)
+        async_add_entities([OnvifSwitch(event, device)], True)
+        # if event.CLASS == CLASS_OUTPUT:
+        #     async_add_entities([OnvifSwitch(event, device)], True)
 
     device.listeners.append(
         async_dispatcher_connect(hass, device.event_new_sensor, async_add_switch)
@@ -54,9 +55,9 @@ class OnvifSwitch(OnvifEventBase, SwitchDevice):
     @property
     def name(self):
         """Return the name of the event."""
-        if self.event.id and self.device.api.vapix.ports[self.event.id].name:
-            return "{} {}".format(
-                self.device.name, self.device.api.vapix.ports[self.event.id].name
-            )
+        # if self.event.id and self.device.api.vapix.ports[self.event.id].name:
+        #     return "{} {}".format(
+        #         self.device.name, self.device.api.vapix.ports[self.event.id].name
+        #     )
 
         return super().name
