@@ -68,7 +68,7 @@ def validate_attributes(list_attributes):
     """Validate face attributes."""
     for attr in list_attributes:
         if attr not in SUPPORTED_ATTRIBUTES:
-            raise vol.Invalid(f"Invalid attribute '{attr}'")
+            raise vol.Invalid(f"Unsupported attribute '{attr}'")
     return list_attributes
 
 
@@ -173,7 +173,7 @@ class MicrosoftFaceDetectEntity(ImageProcessingFaceEntity):
             )
         except HomeAssistantError as err:
             _LOGGER.error("Can't process image: %s", err)
-            return
+            raise
 
         if not face_data:
             face_data = []
@@ -203,7 +203,7 @@ class MicrosoftFaceDetectEntity(ImageProcessingFaceEntity):
             return
         draw = ImageDraw.Draw(img)
 
-        # Save image and json of original image
+        # Save image and json as "timestamped"
         if self._save_timestamped_file:
             timestamp_save_path = directory / f"{self._name}_{timestamp}"
             img.save(f"{timestamp_save_path}.jpg")
@@ -221,13 +221,13 @@ class MicrosoftFaceDetectEntity(ImageProcessingFaceEntity):
             )
             draw_box(draw, box, 1, 1, str(face["faceId"]))
 
-        # Save latest
+        # Save image-with-boxes and json as "latest"
         latest_save_path = directory / f"{self._name}_latest"
         img.save(f"{latest_save_path}.jpg")
         with open(f"{latest_save_path}.json", "w") as outfile:
             json.dump(face_data, outfile, indent=4, sort_keys=True)
 
-        # Save timestamped boxed
+        # Save image-with-boxes as "timestamped"
         if self._save_timestamped_file:
             timestamp_save_path = directory / f"{self._name}_{timestamp}_boxed"
             img.save(f"{timestamp_save_path}.jpg")
