@@ -34,6 +34,9 @@ face_person:
     camera_entity:
       description: Camera to take a picture.
       example: camera.door
+    file:
+      description: Path of file to add as face
+      example: /config/www/faces/family/hans/hans-smiling.jpg
     group:
       description: Name of the group.
       example: family

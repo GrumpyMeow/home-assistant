@@ -20,6 +20,7 @@ _LOGGER = logging.getLogger(__name__)
 ATTR_CAMERA_ENTITY = "camera_entity"
 ATTR_GROUP = "group"
 ATTR_PERSON = "person"
+ATTR_FILE = "file"
 
 CONF_AZURE_REGION = "azure_region"
 
@@ -59,7 +60,8 @@ SCHEMA_FACE_SERVICE = vol.Schema(
     {
         vol.Required(ATTR_PERSON): cv.string,
         vol.Required(ATTR_GROUP): cv.slugify,
-        vol.Required(ATTR_CAMERA_ENTITY): cv.entity_id,
+        vol.Optional(ATTR_CAMERA_ENTITY): cv.entity_id,
+        vol.Optional(ATTR_FILE): cv.isfile,
     }
 )
 
@@ -192,15 +194,24 @@ async def async_setup(hass, config):
             _LOGGER.error(msg)
             raise HomeAssistantError(msg)
 
-        camera_entity = service.data[ATTR_CAMERA_ENTITY]
-
         try:
-            image = await hass.components.camera.async_get_image(camera_entity)
-
+            if ATTR_CAMERA_ENTITY in service.data:
+                camera_entity = service.data[ATTR_CAMERA_ENTITY]
+                _LOGGER.debug("Adding face from camera: %s", camera_entity)
+                image = await hass.components.camera.async_get_image(camera_entity)
+                image = image.content
+            elif ATTR_FILE in service.data:
+                filename = service.data[ATTR_FILE]
+                _LOGGER.debug("Adding face from file: %s", filename)
+                image = open(filename, "rb").read()
+            else:
+                raise HomeAssistantError(
+                    "Please provide either the camera-entityid or filename"
+                )
             await face.call_api(
                 "post",
                 f"persongroups/{g_id}/persons/{p_id}/persistedFaces",
-                image.content,
+                image,
                 binary=True,
             )
         except HomeAssistantError as err:
